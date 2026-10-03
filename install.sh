@@ -8,7 +8,7 @@
 
 KTEX_ROOT="${KTEX_ROOT:-/mnt/us}"
 APP_DIR="$KTEX_ROOT/ktex"
-PAYLOAD_URLS="https://heinrich-xiao.github.io/ktex-kpm/payload.tgz https://raw.githubusercontent.com/Heinrich-XIAO/ktex-kpm/main/payload.tgz"
+PAYLOAD_URLS="https://heinrich-xiao.github.io/ktex-kpm https://raw.githubusercontent.com/Heinrich-XIAO/ktex-kpm/main"
 PAYLOAD_TGZ="$KTEX_ROOT/ktex-payload.tgz"
 
 say() { echo "KTEX: $1"; }
