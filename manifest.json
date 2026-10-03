@@ -1,0 +1,21 @@
+{
+  "manifest_version": 2,
+  "id": "heinrichktex",
+  "name": "KTEX Repository",
+  "description": "KTEX: handwriting-to-LaTeX pad for jailbroken Kindles",
+  "packages": {
+    "ktex": {
+      "name": "KTEX - Handwriting to LaTeX Pad",
+      "author": "Heinrich Xiao",
+      "description": "Write math by hand (or type) in the box at the bottom; KTEX turns it into LaTeX with a live rendered preview on top. Works fully offline.",
+      "artifacts": [
+        {
+          "url": "packages/ktex/artifacts/ktex_0.1.0.kpkg",
+          "version": [0, 1, 0],
+          "dependencies": [],
+          "supported_platforms": ["kindle", "kindle5", "kindlepw2", "kindlehf"]
+        }
+      ]
+    }
+  }
+}
