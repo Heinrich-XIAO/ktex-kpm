@@ -23,6 +23,21 @@
             "kindlepw2",
             "kindlehf"
           ]
+        },
+        {
+          "url": "packages/ktex/artifacts/ktex_0.1.0.kpkg",
+          "version": [
+            0,
+            1,
+            0
+          ],
+          "dependencies": [],
+          "supported_platforms": [
+            "kindle",
+            "kindle5",
+            "kindlepw2",
+            "kindlehf"
+          ]
         }
       ]
     }
