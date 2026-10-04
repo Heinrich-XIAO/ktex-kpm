@@ -11,7 +11,7 @@ KTEX_ROOT="${KTEX_ROOT:-/mnt/us}"
 APP_DIR="$KTEX_ROOT/ktex"
 SCRIPTLET="$KTEX_ROOT/documents/KTEX.sh"
 WORK="$KTEX_ROOT/ktex-install-tmp"
-REPO_URLS="https://heinrich-xiao.github.io/ktex-kpm https://cdn.jsdelivr.net/gh/Heinrich-XIAO/ktex-kpm@main https://raw.githubusercontent.com/Heinrich-XIAO/ktex-kpm/main"
+REPO_URLS="https://raw.githubusercontent.com/Heinrich-XIAO/ktex-kpm/main https://heinrich-xiao.github.io/ktex-kpm https://cdn.jsdelivr.net/gh/Heinrich-XIAO/ktex-kpm@main"
 FALLBACK_VERSIONS=""
 
 say() { echo "KTEX: $1"; }
@@ -46,6 +46,11 @@ for base in $REPO_URLS; do
             v="$(json_field "$WORK/latest.json" version)"
             p="$(json_field "$WORK/latest.json" payload)"
             if [ -n "$v" ] && [ -n "$p" ]; then
+                # Only 1.x+ payloads contain the native binary. The 0.x payloads
+                # were the python/web app and have been deleted, so a mirror
+                # still reporting 0.x is serving a stale cache: ignore it rather
+                # than chasing a 404, and keep asking the other mirrors.
+                printf '%s' "$v" | awk -F. '{ exit !($1+0 >= 1) }' || continue
                 FOUND="$FOUND$v $base/$p
 "
                 break
