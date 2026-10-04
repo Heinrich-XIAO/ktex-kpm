@@ -1,75 +1,93 @@
 #!/bin/sh
-# KTEX installer. Runs itself: fetches the payload, unpacks it to
-# /mnt/us/ktex, drops a library scriptlet in /mnt/us/documents, and starts it.
+# KTEX installer. One command, nothing to upload to the Kindle:
 #
 #   curl -sL <this-url> | sh
 #
-# Needs: sh, python3 (to run the app), a writable /mnt/us, and curl or wget.
+# This script is permanent and never changes; it looks up the current version
+# in latest.json (cache-busted, so CDN caches cannot serve a stale app), then
+# downloads and installs it.
 
 KTEX_ROOT="${KTEX_ROOT:-/mnt/us}"
 APP_DIR="$KTEX_ROOT/ktex"
-PAYLOAD_URLS="https://heinrich-xiao.github.io/ktex-kpm https://raw.githubusercontent.com/Heinrich-XIAO/ktex-kpm/main"
-PAYLOAD_TGZ="$KTEX_ROOT/ktex-payload.tgz"
+SCRIPTLET="$KTEX_ROOT/documents/KTEX.sh"
+WORK="$KTEX_ROOT/ktex-install-tmp"
+REPO_URLS="https://heinrich-xiao.github.io/ktex-kpm https://raw.githubusercontent.com/Heinrich-XIAO/ktex-kpm/main"
 
 say() { echo "KTEX: $1"; }
 die() { say "$1"; exit 1; }
 
-command -v python3 >/dev/null 2>&1 || die "python3 not found. KTEX needs it to run."
-
-fetch() {
-    url="$1"
-    out="$2"
+get() {
+    # get <url> <destination>
     if command -v curl >/dev/null 2>&1; then
-        curl -fsL "$url" -o "$out" && return 0
+        curl -fsL "$1" -o "$2" && return 0
     fi
     if command -v wget >/dev/null 2>&1; then
-        wget -q -O "$out" "$url" && return 0
-    fi
-    if command -v python3 >/dev/null 2>&1; then
-        python3 -c 'import sys,urllib.request; urllib.request.urlretrieve(sys.argv[1], sys.argv[2])' \
-            "$url" "$out" && return 0
+        wget -q -O "$2" "$1" && return 0
     fi
     return 1
 }
 
-echo "KTEX: downloading..."
-rm -f "$PAYLOAD_TGZ"
-for base in $PAYLOAD_URLS; do
-    fetch "$base/payload.tgz" "$PAYLOAD_TGZ" 2>/dev/null && [ -s "$PAYLOAD_TGZ" ] && break
-    rm -f "$PAYLOAD_TGZ"
-done
-[ -s "$PAYLOAD_TGZ" ] || die "download failed. Check the Kindle's WiFi connection."
-say "downloaded $(wc -c < "$PAYLOAD_TGZ" | tr -d ' ') bytes"
+rm -rf "$WORK"
+mkdir -p "$WORK" || die "cannot write to $KTEX_ROOT"
 
-# Replace any previous install, then unpack.
+# ---- resolve the current version -------------------------------------------------
+STAMP="$(date +%s 2>/dev/null || echo 0)"
+LATEST=""
+for base in $REPO_URLS; do
+    if get "$base/latest.json?cb=$STAMP" "$WORK/latest.json"; then
+        LATEST="$base"
+        break
+    fi
+done
+[ -n "$LATEST" ] || die "could not reach the download server (check WiFi)"
+
+VERSION="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' "$WORK/latest.json" | head -1)"
+PAYLOAD="$(sed -n 's/.*"payload"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' "$WORK/latest.json" | head -1)"
+[ -n "$VERSION" ] && [ -n "$PAYLOAD" ] || die "latest.json did not list a version/payload"
+say "installing version $VERSION"
+
+# ---- download -------------------------------------------------------------------
+TGZ="$WORK/payload.tgz"
+get "$LATEST/$PAYLOAD" "$TGZ" || die "download of $PAYLOAD failed"
+[ -s "$TGZ" ] || die "downloaded file was empty"
+say "downloaded $(wc -c < "$TGZ" | tr -d ' ') bytes"
+
+# ---- unpack ---------------------------------------------------------------------
+# /mnt/us is vfat: no symlinks, and some tars abort on them. Extract
+# best-effort, then extract any missing files individually.
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR" || die "cannot create $APP_DIR"
-python3 - "$PAYLOAD_TGZ" "$APP_DIR" <<'PYEOF' || die "could not unpack the payload"
-import sys, tarfile
-with tarfile.open(sys.argv[1]) as tf:
-    for member in tf.getmembers():
-        parts = member.name.split("/")
-        if member.name.startswith("/") or ".." in parts:
-            raise SystemExit("unsafe path in payload: %s" % member.name)
-    tf.extractall(sys.argv[2])
-PYEOF
+( cd "$APP_DIR" && tar xzf "$TGZ" 2>/dev/null )
 
+missing=""
+for want in app/index.html app/ktex.js app/style.css server.py launch.sh; do
+    [ -f "$APP_DIR/$want" ] || missing="$missing $want"
+done
+if [ -n "$missing" ]; then
+    say "some files were missing ($missing ), extracting them individually"
+    for want in $missing; do
+        ( cd "$APP_DIR" && tar xzf "$TGZ" "$want" 2>/dev/null )
+    done
+fi
+
+for want in app/index.html server.py launch.sh; do
+    [ -f "$APP_DIR/$want" ] || die "payload is missing $want"
+done
 chmod +x "$APP_DIR/launch.sh" 2>/dev/null
 chmod +x "$APP_DIR/server.py" 2>/dev/null
-[ -d "$APP_DIR/app" ] || die "payload is missing the app/ directory"
 
-# Library scriptlet, so KTEX can be started by tapping it in the library.
+# ---- library scriptlet ----------------------------------------------------------
 mkdir -p "$KTEX_ROOT/documents" || die "cannot create $KTEX_ROOT/documents"
-cat > "$KTEX_ROOT/documents/KTEX.sh" <<'SCRIPTLET'
+cat > "$SCRIPTLET" <<'SCRIPTLET'
 #!/bin/sh
 # Name: KTEX LaTeX Pad
 # Author: ktex
 KTEX_ROOT="${KTEX_ROOT:-/mnt/us}"
 exec sh "$KTEX_ROOT/ktex/launch.sh"
 SCRIPTLET
-chmod +x "$KTEX_ROOT/documents/KTEX.sh"
-rm -f "$PAYLOAD_TGZ"
+chmod +x "$SCRIPTLET"
 
+rm -rf "$WORK"
 say "installed to $APP_DIR"
 say "starting..."
 sh "$APP_DIR/launch.sh"
