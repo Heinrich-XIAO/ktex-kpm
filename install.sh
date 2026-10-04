@@ -12,18 +12,19 @@ APP_DIR="$KTEX_ROOT/ktex"
 SCRIPTLET="$KTEX_ROOT/documents/KTEX.sh"
 WORK="$KTEX_ROOT/ktex-install-tmp"
 REPO_URLS="https://heinrich-xiao.github.io/ktex-kpm https://cdn.jsdelivr.net/gh/Heinrich-XIAO/ktex-kpm@main https://raw.githubusercontent.com/Heinrich-XIAO/ktex-kpm/main"
-FALLBACK_VERSIONS="0.3.0 0.2.2 0.2.1 0.2.0 0.1.9"
+FALLBACK_VERSIONS="0.3.1 0.3.0 0.2.2 0.2.1 0.2.0"
 
 say() { echo "KTEX: $1"; }
 die() { say "$1"; exit 1; }
 
 get() {
-    # get <url> <destination>
+    # get <url> <destination>. Timeouts matter: a Kindle on flaky wifi must fail
+    # fast and try the next mirror instead of hanging.
     if command -v curl >/dev/null 2>&1; then
-        curl -fsL "$1" -o "$2" && return 0
+        curl -fsL --connect-timeout 8 -m 90 "$1" -o "$2" && return 0
     fi
     if command -v wget >/dev/null 2>&1; then
-        wget -q -O "$2" "$1" && return 0
+        wget -q -T 20 -O "$2" "$1" && return 0
     fi
     return 1
 }
@@ -36,6 +37,7 @@ rm -rf "$WORK"
 mkdir -p "$WORK" || die "cannot write to $KTEX_ROOT"
 
 # ---- ask every mirror which version is current -----------------------------------
+say "looking for the latest version..."
 STAMP="$(date +%s 2>/dev/null || echo 0)"
 FOUND=""
 for base in $REPO_URLS; do
@@ -63,30 +65,46 @@ BEST="$(printf '%s' "$FOUND" | awk 'NF {
     }
 } END { print line }')"
 
-# ---- build the ordered list of things to try --------------------------------------
-TRIES="$BEST"
-for v in $FALLBACK_VERSIONS; do
-    [ -n "$v" ] || continue
-    for base in $REPO_URLS; do
-        TRIES="$TRIES
-$v $base/payload-$v.tgz"
-    done
-done
-
-# ---- download the first one that works ---------------------------------------------
+# ---- download: winner first, then a few recent fallbacks --------------------------
 TGZ="$WORK/payload.tgz"
 CHOSEN=""
-for line in $TRIES; do
-    url="$(echo "$line" | cut -d' ' -f2)"
-    [ -n "$url" ] || continue
+
+try_url() {
     rm -f "$TGZ"
-    if get "$url" "$TGZ" && [ -s "$TGZ" ]; then
-        CHOSEN="$url"
-        break
+    if get "$1" "$TGZ" && [ -s "$TGZ" ]; then
+        CHOSEN="$1"
+        return 0
     fi
-done
+    return 1
+}
+
+BEST_VER="$(echo "$BEST" | cut -d ' ' -f1)"
+BEST_URL="$(echo "$BEST" | cut -d ' ' -f2)"
+
+if [ -n "$BEST_URL" ]; then
+    say "downloading $(basename "$BEST_URL")"
+    try_url "$BEST_URL"
+fi
+
+if [ -z "$CHOSEN" ]; then
+    COUNT=0
+    for v in $FALLBACK_VERSIONS; do
+        [ -n "$v" ] || continue
+        [ "$v" = "$BEST_VER" ] && continue
+        COUNT=$((COUNT + 1))
+        [ "$COUNT" -gt 3 ] && break
+        for base in $REPO_URLS; do
+            if try_url "$base/payload-$v.tgz"; then
+                say "downloaded payload-$v.tgz"
+                break
+            fi
+        done
+        [ -n "$CHOSEN" ] && break
+    done
+fi
+
 [ -n "$CHOSEN" ] || die "could not download any payload (check WiFi)"
-say "installing $CHOSEN (version $(echo "$CHOSEN" | sed 's/.*payload-//; s/\.tgz//'))"
+say "installing $(basename "$CHOSEN") (version $(basename "$CHOSEN" | sed -e 's/^payload-//' -e 's/[.]tgz$//'))"
 say "downloaded $(wc -c < "$TGZ" | tr -d ' ') bytes"
 
 # ---- unpack -----------------------------------------------------------------------

@@ -1,5 +1,5 @@
 {
-  "version": "0.3.1",
-  "payload": "payload-0.3.1.tgz",
+  "version": "0.3.2",
+  "payload": "payload-0.3.2.tgz",
   "bootstrap": "install.sh"
 }
