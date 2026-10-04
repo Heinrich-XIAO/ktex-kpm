@@ -6,7 +6,7 @@
 #
 # Needs: sh, curl or wget, tar, and ~120 MB free on /mnt/us.
 
-DEST=/mnt/us/py
+DEST="${KTEX_PY_DEST:-/mnt/us/py}"
 BUILD=20261003
 PYVER=3.12.15
 BASE="https://github.com/astral-sh/python-build-standalone/releases/download/$BUILD"
@@ -40,12 +40,42 @@ fi
 say "unpacking to $DEST"
 rm -rf "$DEST"
 mkdir -p "$DEST" || die "cannot create $DEST"
-tar xzf "$TGZ" -C "$DEST" || die "unpack failed"
+
+# /mnt/us is vfat and cannot store symlinks. The archive ships python3 and
+# python as symlinks to python3.X, so a plain extract can fail outright and
+# leave nothing usable. Extract best-effort, then extract the real interpreter
+# explicitly by name if it is missing.
+tar xzf "$TGZ" -C "$DEST" 2>/dev/null || true
 rm -f "$TGZ"
 
-PY="$DEST/python/bin/python3"
-[ -x "$PY" ] || PY="$DEST/python/bin/python"
-[ -x "$PY" ] || die "python binary not found after unpacking"
+BINDIR="$DEST/python/bin"
+if [ ! -f "$BINDIR/python3.12" ]; then
+    REAL="$(tar tzf "$TGZ" 2>/dev/null | grep -E 'python/bin/python3\.[0-9]+$' | head -1)"
+    [ -n "$REAL" ] || die "archive contains no python interpreter"
+    say "extracting $REAL explicitly"
+    tar xzf "$TGZ" -C "$DEST" "$REAL" 2>/dev/null || tar xzf "$TGZ" -C "$DEST" --strip-components=0 "$REAL"
+fi
+
+# Find the real interpreter, whatever minor version it is.
+PY=""
+for c in "$BINDIR"/python3.[0-9]* "$BINDIR"/python3 "$BINDIR"/python; do
+    if [ -f "$c" ] && [ ! -L "$c" ]; then
+        PY="$c"
+        break
+    fi
+done
+[ -n "$PY" ] || die "python interpreter not found after unpacking"
+
+# Recreate python3/python as tiny wrapper scripts, which vfat can store.
+# Remove any existing symlink FIRST: writing through a symlink that points at
+# the interpreter would overwrite the interpreter itself.
+for name in python3 python; do
+    rm -f "$BINDIR/$name"
+    printf '#!/bin/sh\nexec "%s" "$@"\n' "$PY" > "$BINDIR/$name"
+    chmod +x "$BINDIR/$name" 2>/dev/null
+done
+say "interpreter: $PY"
+say "wrappers created: python3, python"
 
 if ! "$PY" -V 2>/dev/null; then
     die "found $PY but it will not run on this device (glibc/ABI mismatch?).
