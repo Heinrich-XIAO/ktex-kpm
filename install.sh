@@ -12,7 +12,7 @@ APP_DIR="$KTEX_ROOT/ktex"
 SCRIPTLET="$KTEX_ROOT/documents/KTEX.sh"
 WORK="$KTEX_ROOT/ktex-install-tmp"
 REPO_URLS="https://heinrich-xiao.github.io/ktex-kpm https://cdn.jsdelivr.net/gh/Heinrich-XIAO/ktex-kpm@main https://raw.githubusercontent.com/Heinrich-XIAO/ktex-kpm/main"
-FALLBACK_VERSIONS="0.3.2 0.3.1 0.3.0 0.2.2 0.2.1"
+FALLBACK_VERSIONS=""
 
 say() { echo "KTEX: $1"; }
 die() { say "$1"; exit 1; }
@@ -114,8 +114,10 @@ rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR" || die "cannot create $APP_DIR"
 ( cd "$APP_DIR" && tar xzf "$TGZ" 2>/dev/null )
 
+# 1.0.0+ ships a native ARM binary instead of the old python web app, so the
+# payload is just the binary plus its launcher.
 missing=""
-for want in app/index.html app/ktex.js app/style.css server.py launch.sh; do
+for want in ktex-gtk launch.sh; do
     [ -f "$APP_DIR/$want" ] || missing="$missing $want"
 done
 if [ -n "$missing" ]; then
@@ -124,11 +126,12 @@ if [ -n "$missing" ]; then
         ( cd "$APP_DIR" && tar xzf "$TGZ" "$want" 2>/dev/null )
     done
 fi
-for want in app/index.html server.py launch.sh; do
+for want in ktex-gtk launch.sh; do
     [ -f "$APP_DIR/$want" ] || die "payload is missing $want"
 done
+chmod +x "$APP_DIR/ktex-gtk" 2>/dev/null
 chmod +x "$APP_DIR/launch.sh" 2>/dev/null
-chmod +x "$APP_DIR/server.py" 2>/dev/null
+say "installed native binary $(wc -c < "$APP_DIR/ktex-gtk" | tr -d ' ') bytes"
 
 # ---- library scriptlet -------------------------------------------------------------
 mkdir -p "$KTEX_ROOT/documents" || die "cannot create $KTEX_ROOT/documents"
@@ -143,5 +146,6 @@ chmod +x "$SCRIPTLET"
 
 rm -rf "$WORK"
 say "installed to $APP_DIR"
+say "no python or browser needed - KTEX is now a native app"
 say "starting..."
-sh "$APP_DIR/launch.sh"
+exec sh "$APP_DIR/launch.sh"
