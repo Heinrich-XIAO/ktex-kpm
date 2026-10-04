@@ -85,22 +85,61 @@ fi
 
 say "installed: $("$PY" -V 2>&1)"
 
-# Make it usable without editing PATH: drop a wrapper into a directory that is
-# already on PATH on most jailbreaks, and always tell the user the PATH line.
+# ---- put python on PATH for future shells ---------------------------------------
+# A piped script runs in a subshell, so it cannot change the environment of the
+# shell you typed it into. It can only persist the change for *future* shells by
+# appending to their rc files.
+PYPATH="$BINDIR"
+LINE="export PATH=\"$PYPATH:\$PATH\""
+MARK="# added by ktex install-python.sh"
+
+add_to_rc() {
+    rc="$1"
+    mkdir -p "$(dirname "$rc")" 2>/dev/null || return 1
+    touch "$rc" 2>/dev/null || return 1
+    grep -Fq "$PYPATH" "$rc" 2>/dev/null && return 0
+    {
+        echo ""
+        echo "$MARK"
+        echo "$LINE"
+    } >> "$rc" 2>/dev/null || return 1
+    say "PATH added to $rc"
+    return 0
+}
+
+say "python lives in $PYPATH"
+
+# Best case: a symlink on the root filesystem, which is already on PATH and
+# does support symlinks (unlike /mnt/us).
 if mkdir -p /usr/local/bin 2>/dev/null && [ -w /usr/local/bin ]; then
-    ln -sf "$PY" /usr/local/bin/python3 2>/dev/null && \
-        say "linked /usr/local/bin/python3"
+    if ln -sf "$PY" /usr/local/bin/python3 2>/dev/null; then
+        say "linked /usr/local/bin/python3 (no PATH change needed)"
+    fi
 fi
 
-cat <<EOF
+WROTE=""
+for rc in "$HOME/.profile" "$HOME/.ashrc" /mnt/us/.profile /mnt/us/.ashrc; do
+    [ -n "$rc" ] || continue
+    if add_to_rc "$rc"; then
+        WROTE="$WROTE $rc"
+    fi
+done
 
-Add this to your shell (or just use the full path):
-
-    export PATH="/mnt/us/py/python/bin:\$PATH"
-
-Then check it:
-
-    python3 -V
-
-EOF
+echo ""
+say "installed: $("$PY" -V 2>&1)"
+if [ -n "$WROTE" ]; then
+    say "PATH was written to:$WROTE"
+    echo ""
+    echo "Open a NEW terminal (or run this in the current one):"
+    echo "    . \$HOME/.profile"
+else
+    echo ""
+    echo "Could not write to any rc file. Add this line yourself:"
+    echo "    $LINE"
+fi
+echo ""
+echo "Check it with:  python3 -V"
+echo ""
+echo "Note: KTEX does not need this - it finds python at"
+echo "      $PY"
 exit 0
