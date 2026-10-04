@@ -11,7 +11,7 @@ KTEX_ROOT="${KTEX_ROOT:-/mnt/us}"
 APP_DIR="$KTEX_ROOT/ktex"
 SCRIPTLET="$KTEX_ROOT/documents/KTEX.sh"
 WORK="$KTEX_ROOT/ktex-install-tmp"
-REPO_URLS="https://heinrich-xiao.github.io/ktex-kpm https://raw.githubusercontent.com/Heinrich-XIAO/ktex-kpm/main"
+REPO_URLS="https://heinrich-xiao.github.io/ktex-kpm https://cdn.jsdelivr.net/gh/Heinrich-XIAO/ktex-kpm@main https://raw.githubusercontent.com/Heinrich-XIAO/ktex-kpm/main"
 
 say() { echo "KTEX: $1"; }
 die() { say "$1"; exit 1; }
@@ -41,15 +41,31 @@ for base in $REPO_URLS; do
 done
 [ -n "$LATEST" ] || die "could not reach the download server (check WiFi)"
 
-VERSION="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' "$WORK/latest.json" | head -1)"
-PAYLOAD="$(sed -n 's/.*"payload"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' "$WORK/latest.json" | head -1)"
-[ -n "$VERSION" ] && [ -n "$PAYLOAD" ] || die "latest.json did not list a version/payload"
-say "installing version $VERSION"
+# Parse without sed regex escaping headaches: split on commas, then fields.
+json_field() {
+    tr ',' '\n' < "$1" | grep "\"$2\"" | head -1 | cut -d '"' -f4
+}
+VERSION="$(json_field "$WORK/latest.json" version)"
+PAYLOAD="$(json_field "$WORK/latest.json" payload)"
 
-# ---- download -------------------------------------------------------------------
+# Fall back to these if the index is unreadable or names something unavailable.
+# Payload names contain a version, so each URL is immutable and never stale.
+CANDIDATES="$PAYLOAD payload-0.1.8.tgz payload-0.1.7.tgz payload-0.1.6.tgz payload-0.1.5.tgz payload-0.1.4.tgz"
+
 TGZ="$WORK/payload.tgz"
-get "$LATEST/$PAYLOAD" "$TGZ" || die "download of $PAYLOAD failed"
-[ -s "$TGZ" ] || die "downloaded file was empty"
+rm -f "$TGZ"
+CHOSEN=""
+for p in $CANDIDATES; do
+    [ -n "$p" ] || continue
+    if get "$LATEST/$p" "$TGZ" && [ -s "$TGZ" ]; then
+        CHOSEN="$p"
+        break
+    fi
+    rm -f "$TGZ"
+done
+[ -n "$CHOSEN" ] || die "could not download any payload (check WiFi)"
+VERSION="$(echo "$CHOSEN" | sed "s/[^0-9.]//g; s/\\.$//")"
+say "installing $CHOSEN (version ${VERSION:-unknown})"
 say "downloaded $(wc -c < "$TGZ" | tr -d ' ') bytes"
 
 # ---- unpack ---------------------------------------------------------------------
