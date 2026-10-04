@@ -10,6 +10,21 @@
       "description": "Write math by hand (or type) in the box at the bottom; KTEX turns it into LaTeX with a live rendered preview on top. Works fully offline.",
       "artifacts": [
         {
+          "url": "https://raw.githubusercontent.com/Heinrich-XIAO/ktex-kpm/main/packages/ktex/artifacts/ktex_0.3.3.kpkg",
+          "version": [
+            0,
+            3,
+            3
+          ],
+          "dependencies": [],
+          "supported_platforms": [
+            "kindle",
+            "kindle5",
+            "kindlepw2",
+            "kindlehf"
+          ]
+        },
+        {
           "url": "https://raw.githubusercontent.com/Heinrich-XIAO/ktex-kpm/main/packages/ktex/artifacts/ktex_0.3.2.kpkg",
           "version": [
             0,
@@ -30,21 +45,6 @@
             0,
             3,
             1
-          ],
-          "dependencies": [],
-          "supported_platforms": [
-            "kindle",
-            "kindle5",
-            "kindlepw2",
-            "kindlehf"
-          ]
-        },
-        {
-          "url": "https://raw.githubusercontent.com/Heinrich-XIAO/ktex-kpm/main/packages/ktex/artifacts/ktex_0.3.0.kpkg",
-          "version": [
-            0,
-            3,
-            0
           ],
           "dependencies": [],
           "supported_platforms": [

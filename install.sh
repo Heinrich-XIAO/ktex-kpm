@@ -12,7 +12,7 @@ APP_DIR="$KTEX_ROOT/ktex"
 SCRIPTLET="$KTEX_ROOT/documents/KTEX.sh"
 WORK="$KTEX_ROOT/ktex-install-tmp"
 REPO_URLS="https://heinrich-xiao.github.io/ktex-kpm https://cdn.jsdelivr.net/gh/Heinrich-XIAO/ktex-kpm@main https://raw.githubusercontent.com/Heinrich-XIAO/ktex-kpm/main"
-FALLBACK_VERSIONS="0.3.1 0.3.0 0.2.2 0.2.1 0.2.0"
+FALLBACK_VERSIONS="0.3.2 0.3.1 0.3.0 0.2.2 0.2.1"
 
 say() { echo "KTEX: $1"; }
 die() { say "$1"; exit 1; }
